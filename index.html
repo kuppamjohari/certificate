@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Certificate Generator</title>
+    
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Yesteryear&family=Great+Vibes&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Cinzel:wght@400;700&family=Alex+Brush&family=Montserrat:wght@400;600&family=Pinyon+Script&family=Allura&family=Parisienne&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f3f4f6;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        
+        #loginOverlay {
+            background-color: black;
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #matrixCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+
+        .login-box {
+            position: relative;
+            z-index: 10;
+            background: rgba(0, 20, 0, 0.85);
+            border: 1px solid #00ff00;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
+            backdrop-filter: blur(5px);
+            font-family: 'Share Tech Mono', monospace;
+            color: #00ff00;
+        }
+
+        .login-input {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid #005500;
+            color: #00ff00;
+            font-family: 'Share Tech Mono', monospace;
+        }
+        .login-input:focus {
+            outline: none;
+            border-color: #00ff00;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+        }
+        .login-btn {
+            background: #003300;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .login-btn:hover {
+            background: #00ff00;
+            color: black;
+            box-shadow: 0 0 15px #00ff00;
+        }
+
+        
+        .sidebar { width: 280px; background: white; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; flex-shrink: 0; z-index: 20; }
+        .sidebar-content { overflow-y: auto; flex: 1; padding: 0.75rem; }
+        .sidebar-content::-webkit-scrollbar { width: 4px; }
+        .sidebar-content::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+        .main-area { flex: 1; background: #e5e7eb; position: relative; overflow: hidden; display: flex; flex-direction: column; }
+        .canvas-wrapper { flex: 1; overflow: hidden; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+        canvas.cert-canvas { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); max-width: 100%; max-height: 100%; object-fit: contain; }
+        input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .tab-btn { font-size: 0.75rem; font-weight: 600; padding: 0.5rem; cursor: pointer; color: #6b7280; border-bottom: 2px solid transparent; flex: 1; text-align: center; }
+        .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .blur-content { filter: blur(8px); pointer-events: none; user-select: none; }
+    </style>
+</head>
+<body>
+
+    
+    <div id="loginOverlay">
+        <canvas id="matrixCanvas"></canvas>
+        <div class="login-box rounded-xl p-8 max-w-sm w-full text-center">
+            
+            <div class="mb-6 flex justify-center">
+                <div class="w-20 h-20 rounded-full border-2 border-[#00ff00] flex items-center justify-center bg-black bg-opacity-50 shadow-[0_0_15px_rgba(0,255,0,0.5)]">
+                    <img src="assets/logo.png" alt="WebAi Logo">
+                </div>
+            </div>
+
+            <h2 class="text-2xl font-bold mb-1 tracking-widest text-[#00ff00] drop-shadow-[0_0_5px_rgba(0,255,0,0.8)]">SYSTEM LOCKED</h2>
+            <p class="text-[10px] text-green-700 mb-6 uppercase tracking-widest">Authorized Personnel Only</p>
+            
+            <form id="loginForm" class="space-y-4" onsubmit="event.preventDefault(); checkLogin();">
+                <div class="relative group">
+                    <input type="password" id="passwordInput" placeholder="Enter Access Code" 
+                        class="login-input w-full px-4 py-3 rounded text-center text-sm placeholder-green-900 transition-all duration-300" 
+                        autofocus
+                        autocomplete="off"
+                        autocorrect="off"
+                        autocapitalize="off"
+                        spellcheck="false"
+                    >
+                    <div class="absolute inset-0 rounded pointer-events-none group-hover:shadow-[0_0_10px_rgba(0,255,0,0.2)] transition-shadow"></div>
+                </div>
+                
+                <button type="submit" class="login-btn w-full font-bold py-3 rounded transition-all duration-200 text-sm">
+                    Initiate Sequence
+                </button>
+                
+                <div id="loginError" class="text-red-500 text-xs font-bold hidden mt-2">ACCESS DENIED</div>
+            </form>
+        </div>
+    </div>
+
+    
+    <div id="appLayout" class="flex flex-1 h-full blur-content transition-all duration-300">
+        
+        
+        <div class="sidebar shadow-lg">
+            <div class="p-3 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                <h1 class="text-sm font-bold text-gray-800">Cert Generator</h1>
+                <button onclick="logout()" class="text-[10px] text-red-500 hover:underline">LOGOUT</button>
+            </div>
+            
+            <div class="sidebar-content space-y-4">
+                
+                
+                <div>
+                    <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">1. Template</label>
+                    <input type="file" id="imageInput" accept="image/*" class="block w-full text-[10px] text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"/>
+                </div>
+
+                
+                <div class="bg-blue-50 p-2 rounded border border-blue-100">
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-[10px] font-bold text-blue-800 uppercase">2. Area Box</label>
+                        <button onclick="resetArea()" class="text-[9px] text-blue-600 underline">Reset Center</button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <div class="flex items-center bg-white rounded border border-blue-200 px-1">
+                            <span class="text-[9px] font-bold text-gray-400 w-3">X</span>
+                            <input type="number" id="areaX" class="w-full py-1 text-xs text-right outline-none text-gray-700">
+                        </div>
+                        <div class="flex items-center bg-white rounded border border-blue-200 px-1">
+                            <span class="text-[9px] font-bold text-gray-400 w-3">Y</span>
+                            <input type="number" id="areaY" class="w-full py-1 text-xs text-right outline-none text-gray-700">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="flex items-center bg-white rounded border border-blue-200 px-1">
+                            <span class="text-[9px] font-bold text-gray-400 w-3">W</span>
+                            <input type="number" id="areaW" class="w-full py-1 text-xs text-right outline-none text-gray-700">
+                        </div>
+                        <div class="flex items-center bg-white rounded border border-blue-200 px-1">
+                            <span class="text-[9px] font-bold text-gray-400 w-3">H</span>
+                            <input type="number" id="areaH" class="w-full py-1 text-xs text-right outline-none text-gray-700">
+                        </div>
+                    </div>
+                </div>
+
+                
+                <div class="space-y-2">
+                    <label class="block text-[10px] font-bold text-gray-500 uppercase">3. Style</label>
+                    
+                    <select id="fontSelect" class="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none">
+                        <optgroup label="Elegant">
+                            <option value="Pinyon Script">Pinyon Script</option>
+                            <option value="Allura">Allura</option>
+                            <option value="Parisienne">Parisienne</option>
+                            <option value="Great Vibes">Great Vibes</option>
+                            <option value="Yesteryear" selected>Yesteryear</option>
+                        </optgroup>
+                        <optgroup label="Formal">
+                            <option value="Playfair Display">Playfair Display</option>
+                            <option value="Cinzel">Cinzel</option>
+                            <option value="Montserrat">Montserrat</option>
+                        </optgroup>
+                    </select>
+
+                    <div class="flex items-center gap-2">
+                        <div class="w-16 relative">
+                            <input type="number" id="fontSizeNum" value="38" class="w-full pl-1 pr-1 py-1 text-xs border border-gray-300 rounded text-center outline-none">
+                            <span class="absolute right-1 top-1 text-[9px] text-gray-400">px</span>
+                        </div>
+                        <input type="range" id="fontSizeInput" min="10" max="300" value="38" class="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                    </div>
+
+                    <div class="flex gap-2">
+                        <input type="color" id="colorInput" value="#00038A" class="h-7 w-8 border border-gray-300 p-0.5 rounded cursor-pointer">
+                        <input type="text" id="hexInput" value="#00038A" maxlength="7" class="flex-1 px-2 py-1 text-xs border border-gray-300 rounded font-mono uppercase outline-none">
+                    </div>
+                </div>
+
+                <div class="flex items-center pt-2">
+                    <input type="checkbox" id="showGuides" checked class="w-3 h-3 text-blue-600 rounded border-gray-300">
+                    <label for="showGuides" class="ml-2 text-[10px] text-gray-600">Show Guides</label>
+                </div>
+
+                
+                <div class="pt-2 border-t border-gray-100">
+                    <div class="flex mb-2">
+                        <div class="tab-btn active" data-tab="single">Single</div>
+                        <div class="tab-btn" data-tab="batch">Batch</div>
+                    </div>
+
+                    <div id="single" class="tab-content active space-y-2">
+                        <input type="text" id="nameInput" placeholder="Name" class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded focus:border-blue-500 outline-none" value="Kuppam Johari">
+                        <div class="flex items-center mb-2">
+                            <input type="checkbox" id="autoTitleCase" checked class="w-3 h-3 text-blue-600">
+                            <label for="autoTitleCase" class="ml-2 text-[10px] text-gray-600">Auto Title Case</label>
+                        </div>
+                        <button id="downloadBtn" class="w-full bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold py-2 rounded shadow-sm">
+                            Download
+                        </button>
+                    </div>
+
+                    <div id="batch" class="tab-content space-y-2">
+                        <input type="file" id="listInput" accept=".txt" class="block w-full text-[10px] text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-gray-200 file:text-gray-700 hover:file:bg-gray-300 cursor-pointer"/>
+                        <div id="fileInfo" class="text-[10px] text-gray-500 h-3"></div>
+                        <button id="batchDownloadBtn" disabled class="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-xs font-bold py-2 rounded shadow-sm">
+                            Generate Batch
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="pt-2">
+                    <div class="flex gap-4 justify-center">
+                        <label class="flex items-center cursor-pointer">
+                            <input type="radio" name="format" value="jpg" checked class="text-blue-600 h-3 w-3">
+                            <span class="ml-1 text-[10px] font-bold text-gray-600">JPG</span>
+                        </label>
+                        <label class="flex items-center cursor-pointer">
+                            <input type="radio" name="format" value="pdf" class="text-blue-600 h-3 w-3">
+                            <span class="ml-1 text-[10px] font-bold text-gray-600">PDF</span>
+                        </label>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="main-area">
+            <div class="canvas-wrapper" id="canvasContainer">
+                <div id="placeholderText" class="text-center p-8 opacity-50">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span class="text-sm font-medium text-gray-600">Upload Certificate</span>
+                </div>
+                <canvas id="certificateCanvas" class="cert-canvas" style="display: none;"></canvas>
+            </div>
+            
+            <div id="statusMessage" class="absolute bottom-4 right-4 hidden px-3 py-2 rounded bg-white shadow-lg border border-blue-100 text-xs text-blue-700 font-medium z-10 flex items-center gap-2">
+                <div class="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
+                <span>Processing...</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        
+        const matrixCanvas = document.getElementById('matrixCanvas');
+        const matrixCtx = matrixCanvas.getContext('2d');
+
+        matrixCanvas.width = window.innerWidth;
+        matrixCanvas.height = window.innerHeight;
+
+        const katakana = 'アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズブヅプエェケセテネヘメレヱゲゼデベペオォコソトノホモヨョロヲゴゾドボポヴッン';
+        const latin = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const nums = '0123456789';
+        const alphabet = katakana + latin + nums;
+
+        const fontSize = 16;
+        const columns = matrixCanvas.width / fontSize;
+        const rainDrops = [];
+
+        for( let x = 0; x < columns; x++ ) {
+            rainDrops[x] = 1;
+        }
+
+        const drawMatrix = () => {
+            matrixCtx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            matrixCtx.fillRect(0, 0, matrixCanvas.width, matrixCanvas.height);
+
+            matrixCtx.fillStyle = '#0F0';
+            matrixCtx.font = fontSize + 'px monospace';
+
+            for(let i = 0; i < rainDrops.length; i++) {
+                const text = alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+                matrixCtx.fillText(text, i * fontSize, rainDrops[i] * fontSize);
+
+                if(rainDrops[i] * fontSize > matrixCanvas.height && Math.random() > 0.975){
+                    rainDrops[i] = 0;
+                }
+                rainDrops[i]++;
+            }
+        };
+
+        const matrixInterval = setInterval(drawMatrix, 30);
+
+        window.addEventListener('resize', () => {
+            matrixCanvas.width = window.innerWidth;
+            matrixCanvas.height = window.innerHeight;
+        });
+
+        const _s = [84, 104, 101, 70, 108, 121, 105, 110, 103, 87, 111, 108, 102, 95, 52, 67, 111, 114, 112, 117, 115];
+        
+        const _t = [31,29,21,54,13,52,54,36,8,63,14,30,15,31,3,122,87,75,66,69,67,101];
+
+        function checkLogin() {
+            const inputEl = document.getElementById('passwordInput');
+            const input = inputEl.value.trim();
+            
+            if (input.length !== _t.length) { failLogin(); return; }
+            
+            let valid = true;
+            for (let i = 0; i < input.length; i++) {
+                const k = _s[i % _s.length];
+                const x = input.charCodeAt(i) ^ k;
+                if (x !== _t[i]) { valid = false; break; }
+            }
+
+            if (valid) {
+                document.getElementById('loginOverlay').style.display = 'none';
+                document.getElementById('appLayout').classList.remove('blur-content');
+                clearInterval(matrixInterval);
+                sessionStorage.setItem('cert_auth', 'true');
+            } else { 
+                failLogin(); 
+            }
+        }
+
+        function failLogin() {
+            const err = document.getElementById('loginError');
+            const inp = document.getElementById('passwordInput');
+            
+            err.innerText = "ACCESS DENIED";
+            err.classList.remove('hidden');
+            inp.classList.add('border-red-500');
+            inp.value = '';
+            
+            setTimeout(() => { 
+                err.classList.add('hidden'); 
+                inp.classList.remove('border-red-500'); 
+            }, 3000);
+        }
+
+        function logout() { sessionStorage.removeItem('cert_auth'); location.reload(); }
+
+        window.onload = () => {
+            if(sessionStorage.getItem('cert_auth') === 'true') {
+                document.getElementById('loginOverlay').style.display = 'none';
+                document.getElementById('appLayout').classList.remove('blur-content');
+                clearInterval(matrixInterval);
+            }
+        };
+
+        const imageInput = document.getElementById('imageInput');
+        const nameInput = document.getElementById('nameInput');
+        const listInput = document.getElementById('listInput');
+        const fontSelect = document.getElementById('fontSelect');
+        const fontSizeInput = document.getElementById('fontSizeInput');
+        const fontSizeNum = document.getElementById('fontSizeNum'); 
+        const colorInput = document.getElementById('colorInput');
+        const hexInput = document.getElementById('hexInput');
+        const showGuides = document.getElementById('showGuides');
+        const autoTitleCase = document.getElementById('autoTitleCase');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const batchDownloadBtn = document.getElementById('batchDownloadBtn');
+        
+        const areaX = document.getElementById('areaX');
+        const areaY = document.getElementById('areaY');
+        const areaW = document.getElementById('areaW');
+        const areaH = document.getElementById('areaH');
+
+        const canvas = document.getElementById('certificateCanvas');
+        const ctx = canvas.getContext('2d');
+        const fileInfo = document.getElementById('fileInfo');
+        const statusMessage = document.getElementById('statusMessage');
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+        let bgImage = new Image();
+        let isImageLoaded = false;
+        let area = { x: 50, y: 50, w: 200, h: 100 };
+        let namesList = [];
+        let isDragging = false;
+        let dragAction = null;
+        let dragStart = { x: 0, y: 0 };
+        let startArea = { x:0, y:0, w:0, h:0 };
+        const HANDLE_SIZE = 10;
+
+        if(tabBtns) {
+            tabBtns.forEach(btn => btn.onclick = () => {
+                tabBtns.forEach(b => b.classList.remove('active'));
+                tabContents.forEach(c => c.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById(btn.dataset.tab).classList.add('active');
+            });
+        }
+
+        if(imageInput) {
+            imageInput.onchange = (e) => {
+                const file = e.target.files[0];
+                if(!file) return;
+                const r = new FileReader();
+                r.onload = (ev) => {
+                    bgImage = new Image();
+                    bgImage.onload = () => {
+                        isImageLoaded = true;
+                        document.getElementById('placeholderText').style.display = 'none';
+                        canvas.style.display = 'block';
+                        canvas.width = bgImage.width;
+                        canvas.height = bgImage.height;
+                        resetArea();
+                    };
+                    bgImage.src = ev.target.result;
+                };
+                r.readAsDataURL(file);
+            };
+        }
+
+        function resetArea() {
+            if(!canvas.width) return;
+            const w = Math.floor(canvas.width * 0.5);
+            const h = Math.floor(canvas.height * 0.12);
+            area = { x: Math.floor((canvas.width-w)/2), y: Math.floor((canvas.height-h)/2), w, h };
+            updateInputs();
+            draw();
+        }
+
+        function updateInputs() {
+            if(areaX) areaX.value = Math.round(area.x); 
+            if(areaY) areaY.value = Math.round(area.y);
+            if(areaW) areaW.value = Math.round(area.w); 
+            if(areaH) areaH.value = Math.round(area.h);
+        }
+
+        [areaX, areaY, areaW, areaH].forEach(i => {
+            if(i) {
+                i.oninput = () => {
+                    area.x = parseInt(areaX.value)||0; area.y = parseInt(areaY.value)||0;
+                    area.w = parseInt(areaW.value)||10; area.h = parseInt(areaH.value)||10;
+                    draw();
+                };
+            }
+        });
+
+        if(nameInput) nameInput.oninput = () => draw();
+        if(fontSelect) fontSelect.onchange = () => draw();
+        if(autoTitleCase) autoTitleCase.onchange = () => draw();
+        if(showGuides) showGuides.onchange = () => draw();
+
+        if(fontSizeInput && fontSizeNum) {
+            fontSizeInput.oninput = (e) => { fontSizeNum.value = e.target.value; draw(); };
+            fontSizeNum.oninput = (e) => { fontSizeInput.value = e.target.value; draw(); };
+        }
+        
+        if(colorInput && hexInput) {
+            colorInput.oninput = (e) => { hexInput.value = e.target.value.toUpperCase(); draw(); };
+            hexInput.oninput = (e) => {
+                let val = e.target.value;
+                if(val.startsWith('#') && (val.length===4 || val.length===7)) { colorInput.value = val; draw(); }
+            };
+        }
+
+        if(listInput) {
+            listInput.onchange = (e) => {
+                const f = e.target.files[0];
+                if(f) {
+                    const r = new FileReader();
+                    r.onload = (ev) => {
+                        namesList = ev.target.result.split(/\r?\n/).map(n=>n.trim()).filter(n=>n);
+                        fileInfo.textContent = `${namesList.length} names loaded`;
+                        batchDownloadBtn.disabled = namesList.length === 0;
+                    };
+                    r.readAsText(f);
+                }
+            };
+        }
+
+        function draw(nameOverride = null, exportMode = false) {
+            if(!isImageLoaded) return;
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+            ctx.drawImage(bgImage,0,0);
+
+            let name = nameOverride !== null ? nameOverride : nameInput.value;
+            if(autoTitleCase.checked && name) name = name.replace(/\w\S*/g, t => t.charAt(0).toUpperCase() + t.substr(1).toLowerCase());
+
+            const baseSize = parseInt(fontSizeNum.value);
+            const scale = canvas.width / 800;
+            let size = baseSize * scale;
+            
+            ctx.font = `${size}px "${fontSelect.value}"`;
+            ctx.fillStyle = colorInput.value;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            if(name) {
+                const textW = ctx.measureText(name).width;
+                if(textW > area.w) size *= (area.w / textW);
+                ctx.font = `${size}px "${fontSelect.value}"`;
+                ctx.fillText(name, area.x + area.w/2, area.y + area.h/2);
+            }
+
+            if(showGuides.checked && !exportMode && !nameOverride) drawGuides(scale);
+        }
+
+        function drawGuides(s) {
+            ctx.save();
+            ctx.strokeStyle = '#2563eb'; ctx.lineWidth = 2; ctx.setLineDash([5,3]);
+            ctx.strokeRect(area.x, area.y, area.w, area.h);
+
+            const hs = HANDLE_SIZE * s;
+            ctx.fillStyle = '#2563eb'; ctx.setLineDash([]);
+            const drawH = (x,y) => ctx.fillRect(x-hs/2, y-hs/2, hs, hs);
+            drawH(area.x, area.y); drawH(area.x+area.w, area.y);
+            drawH(area.x+area.w, area.y+area.h); drawH(area.x, area.y+area.h);
+            ctx.restore();
+        }
+
+        function getPos(e) {
+            const r = canvas.getBoundingClientRect();
+            const sx = canvas.width/r.width, sy = canvas.height/r.height;
+            const cx = e.touches?e.touches[0].clientX:e.clientX, cy = e.touches?e.touches[0].clientY:e.clientY;
+            return { x: (cx-r.left)*sx, y: (cy-r.top)*sy };
+        }
+
+        function hit(p) {
+            const s = canvas.width/800, hs = (HANDLE_SIZE*s)*1.5;
+            if(Math.abs(p.x-area.x)<hs && Math.abs(p.y-area.y)<hs) return 'nw';
+            if(Math.abs(p.x-(area.x+area.w))<hs && Math.abs(p.y-area.y)<hs) return 'ne';
+            if(Math.abs(p.x-(area.x+area.w))<hs && Math.abs(p.y-(area.y+area.h))<hs) return 'se';
+            if(Math.abs(p.x-area.x)<hs && Math.abs(p.y-(area.y+area.h))<hs) return 'sw';
+            if(p.x>area.x && p.x<area.x+area.w && p.y>area.y && p.y<area.y+area.h) return 'move';
+            return null;
+        }
+
+        if(canvas) {
+            ['mousedown','touchstart'].forEach(e => canvas.addEventListener(e, ev => {
+                ev.preventDefault();
+                const p = getPos(ev);
+                const act = hit(p);
+                if(act) { isDragging=true; dragAction=act; dragStart=p; startArea={...area}; }
+            }));
+
+            ['mousemove','touchmove'].forEach(e => canvas.addEventListener(e, ev => {
+                ev.preventDefault();
+                const p = getPos(ev);
+                if(!isDragging) {
+                    const h = hit(p);
+                    canvas.style.cursor = h === 'move' ? 'move' : (h ? 'pointer' : 'default');
+                    return;
+                }
+                const dx = p.x-dragStart.x, dy = p.y-dragStart.y;
+                if(dragAction === 'move') { area.x=startArea.x+dx; area.y=startArea.y+dy; }
+                else {
+                    if(dragAction.includes('e')) area.w=Math.max(10, startArea.w+dx);
+                    if(dragAction.includes('s')) area.h=Math.max(10, startArea.h+dy);
+                    if(dragAction.includes('w')) { const nw=Math.max(10, startArea.w-dx); area.x=startArea.x+(startArea.w-nw); area.w=nw; }
+                    if(dragAction.includes('n')) { const nh=Math.max(10, startArea.h-dy); area.y=startArea.y+(startArea.h-nh); area.h=nh; }
+                }
+                updateInputs(); draw();
+            }));
+
+            ['mouseup','touchend'].forEach(e => canvas.addEventListener(e, () => isDragging=false));
+        }
+
+        if(downloadBtn) downloadBtn.onclick = () => doDownload(false);
+        if(batchDownloadBtn) batchDownloadBtn.onclick = () => doDownload(true);
+
+        async function doDownload(isBatch) {
+            if(!isImageLoaded) return alert("Upload template first");
+            if(isBatch && !namesList.length) return alert("Upload names first");
+
+            const fmt = document.querySelector('input[name="format"]:checked').value;
+            if(statusMessage) statusMessage.classList.remove('hidden');
+            
+            setTimeout(async () => {
+                const zip = new JSZip();
+                const list = isBatch ? namesList : [nameInput.value || 'Certificate'];
+                
+                for(let n of list) {
+                    let cleanN = autoTitleCase.checked ? n.replace(/\w\S*/g, t => t.charAt(0).toUpperCase() + t.substr(1).toLowerCase()) : n;
+                    draw(cleanN, true);
+                    const safe = cleanN.replace(/[^a-z0-9]/gi,'_');
+                    
+                    if(fmt === 'pdf') {
+                        const { jsPDF } = window.jspdf;
+                        const o = canvas.width > canvas.height ? 'l' : 'p';
+                        const pdf = new jsPDF({ orientation: o, unit: 'px', format: [canvas.width, canvas.height] });
+                        pdf.addImage(canvas.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, canvas.width, canvas.height);
+                        if(isBatch) zip.file(`${safe}.pdf`, pdf.output('blob'));
+                        else pdf.save(`${safe}.pdf`);
+                    } else {
+                        const data = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
+                        if(isBatch) zip.file(`${safe}.jpg`, data, {base64:true});
+                        else {
+                            const a = document.createElement('a');
+                            a.download = `${safe}.jpg`; a.href = `data:image/jpeg;base64,${data}`; a.click();
+                        }
+                    }
+                }
+
+                if(isBatch) {
+                    saveAs(await zip.generateAsync({type:"blob"}), "Certificates.zip");
+                }
+                
+                if(statusMessage) statusMessage.classList.add('hidden');
+                draw();
+            }, 50);
+        }
+
+        document.fonts.ready.then(() => { if(isImageLoaded) draw(); });
+    </script>
+</body>
+</html>
